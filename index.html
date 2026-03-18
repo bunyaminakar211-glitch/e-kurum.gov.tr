@@ -3,339 +3,601 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexCall v9 — Production Ultimate</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
-    <style>
-        :root { --bg: #010409; --panel: #0d1117; --border: #30363d; --accent: #238636; --blue: #58a6ff; --red: #da3633; --text: #c9d1d9; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; }
-        .app-shell { max-width: 850px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
-        .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; transition: 0.3s; }
-        
-        .status-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 2px solid var(--border); }
-        .status-pill { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 11px; letter-spacing: 0.5px; }
-        .dot { width: 10px; height: 10px; border-radius: 50%; background: #484f58; }
-        .idle .dot { background: #8b949e; }
-        .calling .dot { background: var(--blue); animation: pulse 1s infinite; }
-        .active .dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
-        .incoming .dot { background: #f1e05a; animation: blink 0.5s infinite; }
-        
-        @keyframes pulse { 50% { opacity: 0.2; } }
-        @keyframes blink { 50% { opacity: 0; } }
+    <title>NexCall v3.0 — Güvenli Video İletişim</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 
-        .viewport { display: none; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        .viewport.active { display: grid; }
-        video { width: 100%; border-radius: 8px; background: #000; aspect-ratio: 16/9; object-fit: cover; border: 1px solid var(--border); }
-        
-        .btn { padding: 10px 16px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s; background: #21262d; color: var(--text); }
-        .btn-primary { background: var(--accent); border: none; color: #fff; }
-        .btn-danger { background: var(--red); border: none; color: #fff; }
-        
-        #terminal { height: 150px; overflow-y: auto; background: #010409; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-family: 'SFMono-Regular', monospace; font-size: 11px; margin: 10px 0; color: #8b949e; }
-        input { padding: 10px; border-radius: 6px; background:#0d1117; border:1px solid var(--border); color:#fff; font-size: 14px; }
+    <style>
+        /* ═══════════════════ RESET & TOKENS ═══════════════════ */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg0:   #060b14;
+            --bg1:   #0d1624;
+            --bg2:   #111e30;
+            --bg3:   #172540;
+            --line:  #1e304d;
+            --cyan:  #00d4ff;
+            --cyan2: #0099cc;
+            --green: #00e676;
+            --red:   #ff3d57;
+            --amber: #ffb300;
+            --text:  #e0eaf5;
+            --muted: #5a7a9a;
+            --mono:  'JetBrains Mono', monospace;
+            --sans:  'Syne', sans-serif;
+            --radius: 14px;
+            --glow:  0 0 20px rgba(0,212,255,.18);
+        }
+
+        body {
+            font-family: var(--sans);
+            background: var(--bg0);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        /* Arka plan grid efekti */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,212,255,.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,212,255,.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ═══════════════════ HEADER ═══════════════════ */
+        header {
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--line);
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo {
+            font-family: var(--sans);
+            font-weight: 800;
+            font-size: 22px;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, var(--cyan), #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .conn-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--mono);
+            font-size: 12px;
+            background: var(--bg2);
+            border: 1px solid var(--line);
+            padding: 6px 14px;
+            border-radius: 100px;
+        }
+
+        /* Header ID Banner */
+        .id-banner {
+            width: 100%;
+            background: linear-gradient(90deg, rgba(0,212,255,.08), rgba(124,58,237,.08));
+            border-bottom: 1px solid rgba(0,212,255,.15);
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 1;
+        }
+
+        .id-banner-label {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .id-banner-value {
+            font-family: var(--mono);
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--cyan);
+            letter-spacing: 1px;
+            background: rgba(0,212,255,.07);
+            border: 1px solid rgba(0,212,255,.2);
+            padding: 5px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background .2s, border-color .2s;
+            min-width: 180px;
+            text-align: center;
+        }
+        .id-banner-value:hover {
+            background: rgba(0,212,255,.14);
+            border-color: var(--cyan);
+        }
+
+        .id-banner-copy {
+            font-family: var(--mono);
+            font-size: 11px;
+            background: var(--bg3);
+            border: 1px solid var(--line);
+            color: var(--muted);
+            padding: 5px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all .2s;
+            white-space: nowrap;
+        }
+        .id-banner-copy:hover { color: var(--cyan); border-color: var(--cyan); }
+        .id-banner-copy.copied { color: var(--green); border-color: var(--green); }
+
+        .id-refresh-note {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--muted);
+            opacity: .6;
+        }
+
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--red);
+            transition: background .3s;
+        }
+        .dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+        /* ═══════════════════ ANA LAYOUT ═══════════════════ */
+        .main {
+            width: 100%;
+            max-width: 1100px;
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 20px;
+            padding: 20px 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        @media (max-width: 800px) {
+            .main { grid-template-columns: 1fr; }
+        }
+
+        /* ═══════════════════ SOL PANEL ═══════════════════ */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--bg1);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-family: var(--mono);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+
+        /* ID Kartı */
+        .id-block {
+            background: var(--bg2);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .id-text {
+            font-family: var(--mono);
+            font-size: 13px;
+            color: var(--cyan);
+            word-break: break-all;
+            flex: 1;
+        }
+
+        .copy-btn {
+            background: var(--bg3);
+            border: 1px solid var(--line);
+            color: var(--muted);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: var(--mono);
+            transition: all .2s;
+            white-space: nowrap;
+        }
+        .copy-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+        .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+        /* Input & Butonlar */
+        .input-field {
+            width: 100%;
+            background: var(--bg2);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            color: var(--text);
+            padding: 12px 14px;
+            font-family: var(--mono);
+            font-size: 13px;
+            outline: none;
+            transition: border-color .2s;
+        }
+        .input-field:focus { border-color: var(--cyan); }
+        .input-field::placeholder { color: var(--muted); }
+        .input-field.error { border-color: var(--red); }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: var(--sans);
+            font-size: 14px;
+            transition: all .2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary { background: var(--cyan); color: var(--bg0); width: 100%; margin-top: 10px; }
+        .btn-primary:hover { background: var(--cyan2); transform: translateY(-1px); box-shadow: var(--glow); }
+        .btn-primary:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .btn-danger { background: var(--red); color: white; width: 100%; margin-top: 10px; display: none; }
+        .btn-danger:hover { opacity: .85; }
+
+        /* Medya Kontrolleri */
+        .media-controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px; }
+
+        .ctrl-btn {
+            background: var(--bg2);
+            border: 1px solid var(--line);
+            color: var(--text);
+            padding: 12px 8px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: var(--mono);
+            transition: all .2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+        .ctrl-btn .icon { font-size: 20px; }
+        .ctrl-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+        .ctrl-btn.muted { background: rgba(255,61,87,.12); border-color: var(--red); color: var(--red); }
+        .ctrl-btn.active-share { background: rgba(0,230,118,.12); border-color: var(--green); color: var(--green); }
+
+        /* Chat Paneli */
+        .chat-box {
+            height: 180px;
+            overflow-y: auto;
+            background: var(--bg2);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            scroll-behavior: smooth;
+        }
+        .chat-box::-webkit-scrollbar { width: 4px; }
+        .chat-box::-webkit-scrollbar-track { background: transparent; }
+        .chat-box::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+        .msg { padding: 6px 10px; border-radius: 8px; font-size: 13px; max-width: 90%; word-break: break-word; }
+        .msg.me { background: var(--bg3); border: 1px solid var(--line); align-self: flex-end; }
+        .msg.them { background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); align-self: flex-start; }
+        .msg.sys { color: var(--muted); font-family: var(--mono); font-size: 11px; text-align: center; align-self: center; }
+
+        .chat-input-row { display: flex; gap: 8px; }
+        .chat-input {
+            flex: 1;
+            background: var(--bg2);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 9px 12px;
+            font-size: 13px;
+            outline: none;
+            font-family: var(--sans);
+        }
+        .chat-input:focus { border-color: var(--cyan); }
+
+        .send-btn {
+            background: var(--cyan);
+            border: none;
+            border-radius: 8px;
+            color: var(--bg0);
+            padding: 9px 14px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: opacity .2s;
+        }
+        .send-btn:hover { opacity: .8; }
+        .send-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+        /* ═══════════════════ VİDEO ALANI ═══════════════════ */
+        .video-area {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        @media (max-width: 500px) {
+            .video-grid { grid-template-columns: 1fr; }
+        }
+
+        .video-wrapper {
+            position: relative;
+            background: var(--bg1);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+
+        .video-wrapper.active-call {
+            border-color: var(--cyan);
+            box-shadow: var(--glow);
+        }
+
+        video {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        #local-video { transform: scaleX(-1); }
+        /* Remote video MIRROR OLMAMALI */
+        #remote-video { transform: none; }
+
+        .vid-label {
+            position: absolute;
+            bottom: 10px; left: 10px;
+            background: rgba(6,11,20,.75);
+            backdrop-filter: blur(8px);
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--text);
+            border: 1px solid var(--line);
+        }
+
+        /* Loading overlay — remote video beklenirken */
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: var(--bg1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            transition: opacity .4s;
+        }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+        .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid var(--line);
+            border-top-color: var(--cyan);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-overlay p { font-size: 13px; color: var(--muted); font-family: var(--mono); }
+
+        /* No-cam placeholder */
+        .no-cam {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: var(--muted);
+        }
+        .no-cam .avatar { font-size: 48px; }
+        .no-cam p { font-size: 12px; font-family: var(--mono); }
+
+        /* ═══════════════════ GELEN ARAMA OVERLAY ═══════════════════ */
+        #incoming-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(6,11,20,.85);
+            backdrop-filter: blur(12px);
+            z-index: 999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn .3s ease;
+        }
+        #incoming-overlay.show { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .incoming-card {
+            background: var(--bg1);
+            border: 1px solid var(--cyan);
+            border-radius: 20px;
+            padding: 36px;
+            text-align: center;
+            max-width: 360px;
+            width: 90%;
+            box-shadow: var(--glow), 0 40px 80px rgba(0,0,0,.6);
+            animation: slideUp .3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .ring-icon {
+            font-size: 52px;
+            animation: ring 1s ease infinite;
+            display: inline-block;
+        }
+        @keyframes ring {
+            0%,100% { transform: rotate(-10deg); }
+            50%      { transform: rotate(10deg); }
+        }
+
+        .caller-id-text {
+            font-family: var(--mono);
+            font-size: 13px;
+            color: var(--cyan);
+            background: var(--bg2);
+            padding: 8px 14px;
+            border-radius: 8px;
+            margin: 14px 0;
+            word-break: break-all;
+        }
+
+        .incoming-btns { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+
+        .btn-accept {
+            background: var(--green); color: var(--bg0);
+            border: none; border-radius: 50%;
+            width: 60px; height: 60px;
+            font-size: 22px; cursor: pointer;
+            transition: transform .2s, box-shadow .2s;
+        }
+        .btn-accept:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(0,230,118,.4); }
+
+        .btn-reject {
+            background: var(--red); color: white;
+            border: none; border-radius: 50%;
+            width: 60px; height: 60px;
+            font-size: 22px; cursor: pointer;
+            transition: transform .2s, box-shadow .2s;
+        }
+        .btn-reject:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(255,61,87,.4); }
+
+        /* ═══════════════════ TOAST ═══════════════════ */
+        #toast-area {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: var(--bg2);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-size: 13px;
+            font-family: var(--mono);
+            white-space: nowrap;
+            animation: toastIn .3s ease, toastOut .3s ease 2.7s forwards;
+        }
+        .toast.success { border-color: var(--green); color: var(--green); }
+        .toast.error   { border-color: var(--red);   color: var(--red); }
+        .toast.info    { border-color: var(--cyan);  color: var(--cyan); }
+
+        @keyframes toastIn  { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+
+        /* ═══════════════════ SCROLL ═══════════════════ */
+        html { scroll-behavior: smooth; }
     </style>
 </head>
 <body>
 
-<div class="app-shell">
-    <div class="card status-header" id="state-container">
-        <div class="status-pill idle" id="state-pill">
-            <span class="dot"></span><span id="state-label">READY</span>
-        </div>
-        <div id="timer" style="font-family: monospace; font-weight: bold; color: var(--blue);">00:00</div>
-    </div>
+<!-- ══════════════ TOAST ALANI ══════════════ -->
+<div id="toast-area"></div>
 
-    <div class="card">
-        <div style="font-size: 12px; margin-bottom: 8px; opacity: 0.7;">Your Secure ID: <strong id="peer-id-label" style="color: var(--blue);">...</strong></div>
-        <div style="display: flex; gap: 8px;">
-            <input type="text" id="target-id" placeholder="Remote Peer ID" style="flex:1;">
-            <button class="btn btn-primary" onclick="initiateOutbound()">CALL</button>
-        </div>
-    </div>
-
-    <div class="card" id="media-panel" style="display:none;">
-        <div class="viewport" id="v-grid">
-            <video id="local-v" autoplay muted playsinline></video>
-            <video id="remote-v" autoplay playsinline></video>
-        </div>
-        <div style="display:flex; justify-content:center; gap:10px; margin-top:15px;">
-            <button class="btn" id="audio-btn" onclick="toggleMedia('audio')">🎤 MUTE</button>
-            <button class="btn" id="video-btn" onclick="toggleMedia('video')">📷 CAMERA</button>
-            <button class="btn btn-danger" onclick="hangup()">DISCONNECT</button>
-        </div>
-    </div>
-
-    <div class="card">
-        <div id="terminal"></div>
-        <div style="display: flex; gap: 8px;">
-            <input type="text" id="msg-input" placeholder="Type a message..." style="flex:1;" onkeypress="if(event.key==='Enter') sendText()">
-            <button class="btn" onclick="sendText()">SEND</button>
+<!-- ══════════════ GELEN ARAMA ══════════════ -->
+<div id="incoming-overlay">
+    <div class="incoming-card">
+        <div class="ring-icon">📞</div>
+        <h2 style="margin-top:12px; font-size:18px;">Gelen Arama</h2>
+        <div class="caller-id-text" id="caller-id-text">—</div>
+        <p style="color:var(--muted); font-size:13px;">sizi aramak istiyor</p>
+        <div class="incoming-btns">
+            <button class="btn-accept" onclick="answerCall()" title="Kabul Et">✓</button>
+            <button class="btn-reject" onclick="declineCall()" title="Reddet">✕</button>
         </div>
     </div>
 </div>
 
-<div id="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(1,4,9,0.92); align-items:center; justify-content:center; flex-direction:column; z-index:9999; backdrop-filter:blur(10px);">
-    <h1 id="caller-id-modal" style="color:var(--blue); font-size: 2.5rem; margin-bottom:0;">...</h1>
-    <p style="opacity:0.6; letter-spacing: 2px; margin-bottom:30px;">INCOMING ENCRYPTED CALL</p>
-    <div style="display:flex; gap:20px;">
-        <button class="btn btn-primary" style="padding:15px 45px; border-radius:30px; font-size:16px;" onclick="acceptCall()">ACCEPT</button>
-        <button class="btn btn-danger" style="padding:15px 45px; border-radius:30px; font-size:16px;" onclick="rejectCall()">DECLINE</button>
+<!-- ══════════════ HEADER ══════════════ -->
+<header>
+    <div class="logo">NexCall</div>
+    <div class="conn-badge">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-text">Bağlanıyor...</span>
     </div>
-    <audio id="ring-audio" src="https://assets.mixkit.co/active_storage/sfx/1358/1358-preview.mp3" loop></audio>
+</header>
+
+<!-- ══════════════ ID BANNER ══════════════ -->
+<div class="id-banner">
+    <span class="id-banner-label">Sizin ID'niz</span>
+    <span class="id-banner-value" id="my-id-banner" onclick="copyBannerID()" title="Tıkla Kopyala">Bağlanıyor...</span>
+    <button class="id-banner-copy" id="banner-copy-btn" onclick="copyBannerID()">📋 Kopyala</button>
+    <span class="id-refresh-note">↻ Sayfayı yenileyince ID değişir</span>
 </div>
 
-<script>
-    let peer, currentCall, dataConn, localStream;
-    let timerRef, timeoutRef;
-    let isMediaConnected = false;
-    let isCaller = false; // 1. Deterministic Caller Tracking
-    let appState = "idle"; 
+<!-- ══════════════ ANA LAYOUT ══════════════ -->
+<div class="main">
 
-    function initialize() {
-        const id = crypto.randomUUID().slice(0, 6).toUpperCase();
-        peer = new Peer(id, {
-            config: { 'iceServers': [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
-            ]}
-        });
+    <!-- SOL PANEL -->
+    <div class="sidebar">
 
-        peer.on('open', id => {
-            document.getElementById('peer-id-label').textContent = id;
-            updateUIState("idle", "READY");
-        });
+        <!-- Kimliğim -->
+        <div class="card">
+            <div class="card-title">Kimliğiniz</div>
+            <div class="id-block">
+                <span class="id-text" id="my-id">—</span>
+                <button class="copy-btn" id="copy-btn" onclick="copyMyID()">Kopyala</button>
+            </div>
+        </div>
 
-        peer.on('call', onCallReceived);
-        peer.on('connection', onDataReceived);
-        
-        peer.on('disconnected', () => {
-            log("Network lost. Attempting reconnection...");
-            fullCleanup();
-            peer.reconnect();
-        });
-        
-        peer.on('error', e => log("System Error: " + e.type));
-    }
-
-    function updateUIState(state, label) {
-        appState = state;
-        const pill = document.getElementById('state-pill');
-        pill.className = `status-pill ${state}`;
-        document.getElementById('state-label').textContent = label;
-    }
-
-    // --- Media Core ---
-
-    async function initiateOutbound() {
-        const target = document.getElementById('target-id').value;
-        if (!target || appState !== "idle") return;
-
-        try {
-            updateUIState("calling", "CONNECTING...");
-            isCaller = true; // 1. Biz arıyoruz
-            
-            localStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "user" }, audio: true 
-            });
-            
-            document.getElementById('local-v').srcObject = localStream;
-            document.getElementById('media-panel').style.display = "block";
-            document.getElementById('v-grid').classList.add('active');
-
-            const call = peer.call(target, localStream);
-            setupCallListeners(call);
-
-            timeoutRef = setTimeout(() => {
-                if (!isMediaConnected) {
-                    log("No response. Call timed out.");
-                    hangup();
-                }
-            }, 25000);
-
-        } catch (e) {
-            log("Camera/Mic access denied.");
-            fullCleanup();
-        }
-    }
-
-    function onCallReceived(call) {
-        if (appState !== "idle") { call.close(); return; }
-
-        currentCall = call;
-        isCaller = false; // 1. Biz aranan tarafız
-        updateUIState("incoming", "INCOMING");
-        document.getElementById('modal-overlay').style.display = "flex";
-        document.getElementById('caller-id-modal').textContent = call.peer;
-        
-        document.getElementById('ring-audio').play().catch(()=>{});
-        if(navigator.vibrate) navigator.vibrate([400, 200, 400]);
-    }
-
-    async function acceptCall() {
-        if (appState !== "incoming") return;
-        
-        stopSignals();
-        try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            document.getElementById('local-v').srcObject = localStream;
-            document.getElementById('media-panel').style.display = "block";
-            document.getElementById('v-grid').classList.add('active');
-            
-            currentCall.answer(localStream);
-            setupCallListeners(currentCall);
-        } catch (e) { hangup(); }
-    }
-
-    function rejectCall() {
-        if (currentCall) currentCall.close();
-        fullCleanup();
-    }
-
-    function setupCallListeners(call) {
-        currentCall = call;
-        isMediaConnected = false;
-
-        call.on('stream', stream => {
-            isMediaConnected = true;
-            clearTimeout(timeoutRef);
-            
-            const rVid = document.getElementById('remote-v');
-            rVid.srcObject = stream;
-            rVid.muted = false; // 4. Audio route fix
-            rVid.play().catch(() => log("Remote audio autoplay blocked."));
-
-            updateUIState("active", "ON CALL");
-            startTimer();
-
-            // 1. & 2. Sadece Caller, Retry mekanizması ile data channel açar
-            if (isCaller && appState === "active") {
-                establishDataChannel(call.peer);
-            }
-        });
-
-        call.on('close', () => {
-            log("Call session ended.");
-            fullCleanup();
-        });
-    }
-
-    // --- Data Core ---
-
-    // 2. PRO FIX: Retry Logic for Data Channel
-    function establishDataChannel(peerId, attempts = 3) {
-        if (attempts === 0 || !isCaller) return;
-        
-        log(`Establishing data channel (Attempts left: ${attempts})...`);
-        const conn = peer.connect(peerId);
-        
-        let connectionTimer = setTimeout(() => {
-            if (!conn.open) {
-                conn.close();
-                establishDataChannel(peerId, attempts - 1);
-            }
-        }, 3000);
-
-        conn.on('open', () => {
-            clearTimeout(connectionTimer);
-            setupDataHandlers(conn);
-        });
-    }
-
-    function onDataReceived(conn) {
-        if (dataConn) dataConn.close();
-        setupDataHandlers(conn);
-    }
-
-    function setupDataHandlers(conn) {
-        dataConn = conn;
-        dataConn.on('open', () => log("Data link secured."));
-        dataConn.on('data', d => {
-            if (d.type === "CHAT") log(`${conn.peer}: ${d.val}`);
-        });
-        dataConn.on('close', () => log("Data link lost."));
-    }
-
-    function sendText() {
-        const input = document.getElementById('msg-input');
-        if (!input.value || !dataConn || !dataConn.open) return;
-        
-        dataConn.send({ type: "CHAT", val: input.value });
-        log(`Me: ${input.value}`);
-        input.value = "";
-    }
-
-    // --- Cleaners ---
-
-    function toggleMedia(type) {
-        if (!localStream) return;
-        const track = type === 'audio' ? localStream.getAudioTracks()[0] : localStream.getVideoTracks()[0];
-        if (track) {
-            track.enabled = !track.enabled;
-            document.getElementById(`${type}-btn`).textContent = track.enabled ? 
-                (type === 'audio' ? "🎤 MUTE" : "📷 CAMERA") : 
-                (type === 'audio' ? "🔇 UNMUTE" : "📷 START VIDEO");
-        }
-    }
-
-    function fullCleanup() {
-        if (localStream) {
-            localStream.getTracks().forEach(t => t.stop());
-            localStream = null;
-        }
-        
-        isMediaConnected = false;
-        isCaller = false;
-        clearTimeout(timeoutRef);
-        clearInterval(timerRef);
-        
-        document.getElementById('media-panel').style.display = "none";
-        document.getElementById('modal-overlay').style.display = "none";
-        document.getElementById('timer').textContent = "00:00";
-        document.getElementById('v-grid').classList.remove('active');
-        
-        document.getElementById('audio-btn').textContent = "🎤 MUTE";
-        document.getElementById('video-btn').textContent = "📷 CAMERA";
-        
-        if (currentCall) currentCall.close();
-        if (dataConn) dataConn.close();
-        
-        currentCall = null;
-        dataConn = null;
-        updateUIState("idle", "READY");
-        stopSignals();
-    }
-
-    function hangup() {
-        fullCleanup();
-    }
-
-    // --- Tools ---
-
-    function startTimer() {
-        clearInterval(timerRef);
-        let s = 0;
-        timerRef = setInterval(() => {
-            s++;
-            const m = Math.floor(s/60).toString().padStart(2,'0');
-            const sec = (s%60).toString().padStart(2,'0');
-            document.getElementById('timer').textContent = `${m}:${sec}`;
-        }, 1000);
-    }
-
-    function log(m) {
-        const t = document.getElementById('terminal');
-        const d = document.createElement('div');
-        d.textContent = `> ${m}`;
-        t.appendChild(d);
-        t.scrollTop = t.scrollHeight;
-    }
-
-    function stopSignals() {
-        const a = document.getElementById('ring-audio');
-        a.pause(); a.currentTime = 0;
-        if(navigator.vibrate) navigator.vibrate(0);
-    }
-
-    initialize();
-</script>
-</body>
-</html>
+        <!-- Arama -->
+        <div class="card">
+            <div class="card-title">Bağlantı Kur</div>
+            <input type="text" class="input-field" id="remote-id-input"
+                placeholder="Karşı tarafın ID'si..."
+                oninput="clearInputError()"
+                onkeydown="if(event.key==='Enter') startCall
