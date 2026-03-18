@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NexCall v12 | SaaS Edition</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --glass: rgba(255, 255, 255, 0.02);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent: #00d2ff;
+            --bg: #030508;
+            --panel: #0d1117;
+        }
+
+        body {
+            margin: 0; background: var(--bg); color: #c9d1d9;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            height: 100vh; display: flex; overflow: hidden;
+        }
+
+        /* --- Layout --- */
+        .sidebar {
+            width: 280px; background: var(--panel); border-right: 1px solid var(--glass-border);
+            display: flex; flex-direction: column; transition: 0.3s;
+        }
+        .main-stage { flex: 1; display: flex; flex-direction: column; padding: 20px; position: relative; }
+
+        /* --- User List --- */
+        .user-list { flex: 1; overflow-y: auto; padding: 15px; }
+        .user-item {
+            display: flex; align-items: center; gap: 12px; padding: 12px;
+            border-radius: 12px; cursor: pointer; transition: 0.2s;
+            border: 1px solid transparent; margin-bottom: 8px;
+        }
+        .user-item:hover { background: var(--glass); border-color: var(--glass-border); }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #4b5563; }
+        .status-dot.online { background: #2ed573; box-shadow: 0 0 8px #2ed573; }
+
+        /* --- Video Grid --- */
+        .video-grid {
+            flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+            min-height: 0; align-items: center;
+        }
+        .v-box {
+            position: relative; border-radius: 24px; overflow: hidden;
+            background: #000; border: 1px solid var(--glass-border); aspect-ratio: 16/9;
+        }
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        /* --- Control Bar --- */
+        .controls {
+            height: 80px; display: flex; justify-content: center; align-items: center; gap: 15px;
+            background: var(--panel); border-radius: 20px; margin-top: 20px; border: 1px solid var(--glass-border);
+        }
+        .btn {
+            width: 50px; height: 50px; border-radius: 50%; border: 1px solid var(--glass-border);
+            background: var(--glass); color: white; cursor: pointer; transition: 0.2s;
+        }
+        .btn:hover { transform: translateY(-3px); background: var(--glass-border); }
+        .btn.hangup { background: #ff4757; border: none; }
+        
+        #login-overlay {
+            position: fixed; inset: 0; background: var(--bg); z-index: 10000;
+            display: flex; align-items: center; justify-content: center; text-align: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { position: absolute; left: -280px; z-index: 100; height: 100%; }
+            .sidebar.active { left: 0; }
+            .video-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="login-overlay">
+    <div class="glass-card" style="padding: 40px; border: 1px solid var(--glass-border); border-radius: 30px;">
+        <h1 style="color: var(--accent); margin-bottom: 10px;">NexCall v12</h1>
+        <p style="opacity: 0.6; margin-bottom: 30px;">Kullanıcı adınızı seçin ve başlayın</p>
+        <input type="text" id="username-input" placeholder="Adınız..." style="padding:15px; border-radius:12px; border:1px solid var(--glass-border); background:#161b22; color:white; width:250px; text-align:center; font-size:1.1rem;">
+        <br><br>
+        <button class="btn" style="width:200px; border-radius:12px; background:var(--accent); color:#000; font-weight:bold;" onclick="joinSystem()">SİSTEME GİRİŞ YAP</button>
+    </div>
+</div>
+
+<aside class="sidebar" id="sidebar">
+    <div style="padding: 20px; border-bottom: 1px solid var(--glass-border);">
+        <h3 style="margin:0; font-size: 1rem; color: var(--accent);">AKTİF KULLANICILAR</h3>
+    </div>
+    <div class="user-list" id="user-directory">
+        </div>
+</aside>
+
+<main class="main-stage">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <button class="btn" onclick="document.getElementById('sidebar').classList.toggle('active')" style="width:40px; height:40px;"><i class="fa-solid fa-bars"></i></button>
+        <div id="timer" style="font-family: monospace; font-weight: bold; color: var(--accent);">00:00</div>
+        <div id="my-label" style="font-size: 0.8rem; opacity: 0.5;">Giriş Yapılmadı</div>
+    </div>
+
+    <div class="video-grid">
+        <div class="v-box">
+            <video id="local-v" autoplay muted playsinline></video>
+            <div style="position:absolute; bottom:10px; left:10px; font-size:10px; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:4px;">SİZ</div>
+        </div>
+        <div class="v-box">
+            <video id="remote-v" autoplay playsinline></video>
+            <div id="remote-label" style="position:absolute; bottom:10px; left:10px; font-size:10px; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:4px;">BAĞLANTI YOK</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn" id="mic-btn" onclick="toggleMedia('audio')"><i class="fa-solid fa-microphone"></i></button>
+        <button class="btn" id="cam-btn" onclick="toggleMedia('video')"><i class="fa-solid fa-video"></i></button>
+        <button class="btn hangup" onclick="hangup()"><i class="fa-solid fa-phone-slash"></i></button>
+    </div>
+</main>
+
+<div id="call-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:1000; align-items:center; justify-content:center; flex-direction:column;">
+    <h2 id="caller-name">...</h2>
+    <p>Arıyor...</p>
+    <div style="display:flex; gap:20px;">
+        <button class="btn" style="background:#2ed573; color:black; width:70px; height:70px;" onclick="acceptCall()"><i class="fa-solid fa-check"></i></button>
+        <button class="btn hangup" style="width:70px; height:70px;" onclick="rejectCall()"><i class="fa-solid fa-x"></i></button>
+    </div>
+    <audio id="ring-sfx" src="https://assets.mixkit.co/active_storage/sfx/1358/1358-preview.mp3" loop></audio>
+</div>
+
+<script>
+    // --- FIREBASE CONFIG (Sadece örnek amaçlıdır, kendi config'inizi yapıştırın) ---
+    // Not: Gerçek bir projede Firebase Console'dan aldığınız config'i buraya koymalısınız.
+    const firebaseConfig = {
+        databaseURL: "https://PROJE-ID-DEFAULT-RTDB.firebaseio.com/" 
+    };
+    
+    // Uygulama Değişkenleri
+    let myName = "";
+    let peer, localStream, currentCall;
+    let db;
+    
+    async function joinSystem() {
+        myName = document.getElementById('username-input').value.trim();
+        if(!myName) return alert("İsim giriniz");
+
+        // Firebase Başlatma (Gerçek config ile çalışır)
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+        } catch(e) { console.error("Firebase Hatası: Kendi config'inizi ekleyin."); }
+
+        document.getElementById('login-overlay').style.display = "none";
+        initPeer();
+    }
+
+    function initPeer() {
+        const pId = crypto.randomUUID().slice(0, 8).toUpperCase();
+        peer = new Peer(pId, {
+            config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }] }
+        });
+
+        peer.on('open', id => {
+            document.getElementById('my-label').textContent = `${myName} (${id})`;
+            updatePresence(id);
+            listenPresence();
+        });
+
+        peer.on('call', handleCall);
+    }
+
+    // Presence Logic (Firebase)
+    function updatePresence(peerId) {
+        if(!db) return;
+        const myRef = db.ref('users/' + peerId);
+        myRef.set({ name: myName, id: peerId, status: 'online', last_seen: Date.now() });
+        myRef.onDisconnect().remove();
+    }
+
+    function listenPresence() {
+        if(!db) return;
+        db.ref('users').on('value', snapshot => {
+            const users = snapshot.val();
+            const listDiv = document.getElementById('user-directory');
+            listDiv.innerHTML = "";
+            
+            for(let id in users) {
+                if(id === peer.id) continue;
+                const user = users[id];
+                const item = document.createElement('div');
+                item.className = "user-item";
+                item.innerHTML = `<span class="status-dot online"></span> <div><strong>${user.name}</strong><br><small style="opacity:0.5">${id}</small></div>`;
+                item.onclick = () => startCall(user.id);
+                listDiv.appendChild(item);
+            }
+        });
+    }
+
+    // Media Logic
+    async function startCall(targetId) {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('local-v').srcObject = localStream;
+            const call = peer.call(targetId, localStream);
+            setupCall(call);
+        } catch(e) { alert("Kamera açılamadı"); }
+    }
+
+    function handleCall(call) {
+        currentCall = call;
+        document.getElementById('call-modal').style.display = "flex";
+        document.getElementById('caller-name').textContent = call.peer;
+        document.getElementById('ring-sfx').play();
+    }
+
+    async function acceptCall() {
+        document.getElementById('call-modal').style.display = "none";
+        document.getElementById('ring-sfx').pause();
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        document.getElementById('local-v').srcObject = localStream;
+        currentCall.answer(localStream);
+        setupCall(currentCall);
+    }
+
+    function setupCall(call) {
+        currentCall = call;
+        call.on('stream', stream => {
+            const rv = document.getElementById('remote-v');
+            rv.srcObject = stream;
+            rv.play();
+            document.getElementById('remote-label').textContent = "BAĞLANDI";
+        });
+    }
+
+    function hangup() {
+        if(currentCall) currentCall.close();
+        if(localStream) localStream.getTracks().forEach(t => t.stop());
+        document.getElementById('remote-v').srcObject = null;
+        document.getElementById('local-v').srcObject = null;
+        document.getElementById('remote-label').textContent = "BAĞLANTI KESİLDİ";
+    }
+
+    function toggleMedia(type) {
+        if(!localStream) return;
+        const track = type === 'audio' ? localStream.getAudioTracks()[0] : localStream.getVideoTracks()[0];
+        track.enabled = !track.enabled;
+        document.getElementById(type + '-btn').style.background = track.enabled ? 'var(--glass)' : 'var(--danger)';
+    }
+
+</script>
+</body>
+</html>
